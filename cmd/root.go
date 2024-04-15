@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/fatih/color"
@@ -22,7 +23,7 @@ var rootCmd = &cobra.Command{
 	Run: runServer,
 }
 
-func replaceTerms(packet string, terms []string) string {
+func replaceTerms(packet string, terms []string) (string, bool) {
 	foundMatch := false
 	for _, term := range terms {
 		if strings.Contains(packet, term) {
@@ -32,14 +33,26 @@ func replaceTerms(packet string, terms []string) string {
 		}
 	}
 
-	if !foundMatch {
-		return "NO MATCH\n"
-	}
-
-	return packet
+	return packet, foundMatch
 }
 
-func handleConnection(conn net.Conn, bufferSize int, terms []string) {
+func replaceRegexTerms(packet string, terms []string) (string, bool) {
+	foundMatch := false
+	for _, term := range terms {
+		regex := regexp.MustCompile(term)
+		if regex.MatchString(packet) {
+			packet = regex.ReplaceAllStringFunc(packet, func(s string) string {
+				return color.CyanString(s)
+			})
+			foundMatch = true
+		}
+	}
+
+	return packet, foundMatch
+
+}
+
+func handleConnection(conn net.Conn, bufferSize int, terms []string, regexTerms []string) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -53,11 +66,15 @@ func handleConnection(conn net.Conn, bufferSize int, terms []string) {
 
 	packet := string(output)
 	fmt.Printf("\nConnection recieved from %s ", conn.RemoteAddr())
+	packet, foundRegexMatch := replaceRegexTerms(packet, regexTerms)
+	packet, foundTextMatch := replaceTerms(packet, terms)
 
-	if len(terms) == 0 {
-		fmt.Printf("\n%s", packet)
-	} else {
-		fmt.Print(replaceTerms(packet, terms))
+	if len(terms) != 0 || len(regexTerms) != 0 {
+		if foundTextMatch || foundRegexMatch {
+			fmt.Printf("\n%s", packet)
+		} else {
+			fmt.Print("NO MATCH")
+		}
 	}
 
 	conn.Write([]byte(""))
@@ -80,6 +97,7 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	buffer_size, _ := cmd.Flags().GetInt("buffer-size")
 	terms, _ := cmd.Flags().GetStringSlice("search-terms")
+	regexTerms, _ := cmd.Flags().GetStringSlice("regex-terms")
 
 	listener, err := net.Listen(network, addr.String()+":"+fmt.Sprintf("%d", port))
 	if err != nil {
@@ -94,7 +112,7 @@ func runServer(cmd *cobra.Command, args []string) {
 			fmt.Println(err)
 			break
 		}
-		go handleConnection(conn, buffer_size, terms)
+		go handleConnection(conn, buffer_size, terms, regexTerms)
 	}
 }
 
@@ -111,4 +129,5 @@ func init() {
 	rootCmd.Flags().Int("buffer-size", 1024, "Size of input buffer from network connection")
 	rootCmd.Flags().StringP("network", "n", "tcp", "Network protocol to use. Either tcp or udp")
 	rootCmd.Flags().StringSliceP("search-terms", "s", []string{}, "Term(s) to search incoming requests for")
+	rootCmd.Flags().StringSliceP("regex-terms", "r", []string{}, "Term(s) as regexes to search incoming requests for")
 }
