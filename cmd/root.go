@@ -16,12 +16,12 @@ var rootCmd = &cobra.Command{
 	Use:   "watchtower",
 	Short: "A programmable TCP/UDP server to debug incoming network requests.",
 	Long: `A programmable TCP/UDP server to debug incoming network requests.
-	Watchtower can be configured to watch for specific strings, regex expressions, and much more.
+Watchtower can be configured to watch for specific strings, regex expressions, and much more.
 	
-	Example usage (Host a TCP server on port 2000 looking for any request with 'foo' in it):
-	watchtower -p 2000 -t tcp -s foo`,
+Example usage (Host a TCP server on port 2000 looking for any request with 'foo' in it):
+watchtower -p 2000 -t tcp -s foo`,
 	Run:     runServer,
-	Version: "0.1.0",
+	Version: "0.1.1",
 }
 
 func replaceStringTerms(packet string, terms []string) (string, bool) {
@@ -57,13 +57,17 @@ func replaceTerms(packet string, terms []string) (string, bool) {
 
 }
 
-func handleConnection(conn net.Conn, bufferSize int, terms []string) {
+func handleConnection(conn net.Conn, terms []string) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
-	output := make([]byte, bufferSize)
+	// Peek so we can read the size of the buffer
+	_, err := reader.Peek(1)
+	if err != nil {
+		panic(err)
+	}
 
-	_, err := reader.Read(output)
+	output, err := reader.Peek(reader.Buffered())
 	if err != nil {
 		conn.Close()
 		return
@@ -99,7 +103,6 @@ func runServer(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	buffer_size, _ := cmd.Flags().GetInt("buffer-size")
 	terms, _ := cmd.Flags().GetStringSlice("search-terms")
 
 	listener, err := net.Listen(network, addr.String()+":"+fmt.Sprintf("%d", port))
@@ -115,7 +118,7 @@ func runServer(cmd *cobra.Command, args []string) {
 			fmt.Println(err)
 			break
 		}
-		go handleConnection(conn, buffer_size, terms)
+		go handleConnection(conn, terms)
 	}
 }
 
@@ -129,7 +132,6 @@ func Execute() {
 func init() {
 	rootCmd.Flags().IPP("address", "a", net.ParseIP("127.0.0.1"), "IP To host server on")
 	rootCmd.Flags().IntP("port", "p", 8000, "Port to host server on")
-	rootCmd.Flags().Int("buffer-size", 1024, "Size of input buffer from network connection")
 	rootCmd.Flags().StringP("network", "n", "tcp", "Network protocol to use. Either tcp or udp")
 	rootCmd.Flags().StringSliceP("search-terms", "s", []string{}, `Term(s) to search incoming requests for. Set the environment variable
 WATCHTOWER_USE_REGEX = 1 to use regex searches

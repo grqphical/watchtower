@@ -48,6 +48,12 @@ export WATCHTOWER_USE_REGEX=1
 watchtower -s "\d*"
 ```
 
+## Changelog
+
+### 0.1.1
+
+- Removed buffer size option, buffer size is now automatically determined
+
 ## License
 
 watchtower is licensed under the MIT license
