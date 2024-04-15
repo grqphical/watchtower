@@ -1,6 +1,6 @@
 package main
 
-import "watchtower/cmd"
+import "github.com/grqphical/watchtower/cmd"
 
 func main() {
 	cmd.Execute()
