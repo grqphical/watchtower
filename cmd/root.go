@@ -20,15 +20,16 @@ var rootCmd = &cobra.Command{
 	
 	Example usage (Host a TCP server on port 2000 looking for any request with 'foo' in it):
 	watchtower -p 2000 -t tcp -s foo`,
-	Run: runServer,
+	Run:     runServer,
+	Version: "0.1.0",
 }
 
-func replaceTerms(packet string, terms []string) (string, bool) {
+func replaceStringTerms(packet string, terms []string) (string, bool) {
 	foundMatch := false
 	for _, term := range terms {
 		if strings.Contains(packet, term) {
 			// Colour the output to highlight the found value
-			packet = strings.ReplaceAll(packet, term, color.New(color.FgCyan).Sprint(term))
+			packet = strings.ReplaceAll(packet, term, color.CyanString(term))
 			foundMatch = true
 		}
 	}
@@ -36,7 +37,11 @@ func replaceTerms(packet string, terms []string) (string, bool) {
 	return packet, foundMatch
 }
 
-func replaceRegexTerms(packet string, terms []string) (string, bool) {
+func replaceTerms(packet string, terms []string) (string, bool) {
+	if os.Getenv("WATCHTOWER_USE_REGEX") != "1" {
+		return replaceStringTerms(packet, terms)
+	}
+
 	foundMatch := false
 	for _, term := range terms {
 		regex := regexp.MustCompile(term)
@@ -52,7 +57,7 @@ func replaceRegexTerms(packet string, terms []string) (string, bool) {
 
 }
 
-func handleConnection(conn net.Conn, bufferSize int, terms []string, regexTerms []string) {
+func handleConnection(conn net.Conn, bufferSize int, terms []string) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -66,14 +71,13 @@ func handleConnection(conn net.Conn, bufferSize int, terms []string, regexTerms 
 
 	packet := string(output)
 	fmt.Printf("\nConnection recieved from %s ", conn.RemoteAddr())
-	packet, foundRegexMatch := replaceRegexTerms(packet, regexTerms)
-	packet, foundTextMatch := replaceTerms(packet, terms)
+	packet, foundMatch := replaceTerms(packet, terms)
 
-	if len(terms) != 0 || len(regexTerms) != 0 {
-		if foundTextMatch || foundRegexMatch {
+	if len(terms) != 0 {
+		if foundMatch {
 			fmt.Printf("\n%s", packet)
 		} else {
-			fmt.Print("NO MATCH")
+			fmt.Println("NO MATCH")
 		}
 	}
 
@@ -97,7 +101,6 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	buffer_size, _ := cmd.Flags().GetInt("buffer-size")
 	terms, _ := cmd.Flags().GetStringSlice("search-terms")
-	regexTerms, _ := cmd.Flags().GetStringSlice("regex-terms")
 
 	listener, err := net.Listen(network, addr.String()+":"+fmt.Sprintf("%d", port))
 	if err != nil {
@@ -112,7 +115,7 @@ func runServer(cmd *cobra.Command, args []string) {
 			fmt.Println(err)
 			break
 		}
-		go handleConnection(conn, buffer_size, terms, regexTerms)
+		go handleConnection(conn, buffer_size, terms)
 	}
 }
 
@@ -128,6 +131,7 @@ func init() {
 	rootCmd.Flags().IntP("port", "p", 8000, "Port to host server on")
 	rootCmd.Flags().Int("buffer-size", 1024, "Size of input buffer from network connection")
 	rootCmd.Flags().StringP("network", "n", "tcp", "Network protocol to use. Either tcp or udp")
-	rootCmd.Flags().StringSliceP("search-terms", "s", []string{}, "Term(s) to search incoming requests for")
-	rootCmd.Flags().StringSliceP("regex-terms", "r", []string{}, "Term(s) as regexes to search incoming requests for")
+	rootCmd.Flags().StringSliceP("search-terms", "s", []string{}, `Term(s) to search incoming requests for. Set the environment variable
+WATCHTOWER_USE_REGEX = 1 to use regex searches
+	`)
 }
