@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
-	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -24,40 +22,7 @@ watchtower -p 2000 -t tcp -s foo`,
 	Version: "0.1.1",
 }
 
-func replaceStringTerms(packet string, terms []string) (string, bool) {
-	foundMatch := false
-	for _, term := range terms {
-		if strings.Contains(packet, term) {
-			// Colour the output to highlight the found value
-			packet = strings.ReplaceAll(packet, term, color.CyanString(term))
-			foundMatch = true
-		}
-	}
-
-	return packet, foundMatch
-}
-
-func replaceTerms(packet string, terms []string) (string, bool) {
-	if os.Getenv("WATCHTOWER_USE_REGEX") != "1" {
-		return replaceStringTerms(packet, terms)
-	}
-
-	foundMatch := false
-	for _, term := range terms {
-		regex := regexp.MustCompile(term)
-		if regex.MatchString(packet) {
-			packet = regex.ReplaceAllStringFunc(packet, func(s string) string {
-				return color.CyanString(s)
-			})
-			foundMatch = true
-		}
-	}
-
-	return packet, foundMatch
-
-}
-
-func handleConnection(conn net.Conn, terms []string) {
+func handleConnection(conn net.Conn, terms []string, file string) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -75,13 +40,23 @@ func handleConnection(conn net.Conn, terms []string) {
 
 	packet := string(output)
 	fmt.Printf("\nConnection recieved from %s ", conn.RemoteAddr())
-	packet, foundMatch := replaceTerms(packet, terms)
+	colouredPacket, foundMatch := replaceTerms(packet, terms)
+	if file != "" && foundMatch {
+		file, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+
+		file.Write([]byte(packet))
+
+		file.Close()
+	}
 
 	if len(terms) != 0 {
 		if foundMatch {
-			fmt.Printf("\n%s", packet)
+			fmt.Printf("\n%s", colouredPacket)
 		} else {
-			fmt.Println("NO MATCH")
+			fmt.Println(color.RedString("NO MATCH"))
 		}
 	}
 
@@ -104,6 +79,7 @@ func runServer(cmd *cobra.Command, args []string) {
 	}
 
 	terms, _ := cmd.Flags().GetStringSlice("search-terms")
+	file, _ := cmd.Flags().GetString("output-file")
 
 	listener, err := net.Listen(network, addr.String()+":"+fmt.Sprintf("%d", port))
 	if err != nil {
@@ -118,7 +94,7 @@ func runServer(cmd *cobra.Command, args []string) {
 			fmt.Println(err)
 			break
 		}
-		go handleConnection(conn, terms)
+		go handleConnection(conn, terms, file)
 	}
 }
 
@@ -136,4 +112,5 @@ func init() {
 	rootCmd.Flags().StringSliceP("search-terms", "s", []string{}, `Term(s) to search incoming requests for. Set the environment variable
 WATCHTOWER_USE_REGEX = 1 to use regex searches
 	`)
+	rootCmd.Flags().StringP("output-file", "f", "", "File to output matched values to")
 }
