@@ -3,10 +3,10 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -29,22 +29,24 @@ func handleConnection(conn net.Conn, terms []string, file string) {
 	// Peek so we can read the size of the buffer
 	_, err := reader.Peek(1)
 	if err != nil {
-		panic(err)
+		slog.Error("Could not read incoming data")
+		return
 	}
 
 	output, err := reader.Peek(reader.Buffered())
 	if err != nil {
+		slog.Error("Could not read incoming data")
 		conn.Close()
 		return
 	}
 
 	packet := string(output)
-	fmt.Printf("\nConnection recieved from %s ", conn.RemoteAddr())
+	slog.Info(fmt.Sprintf("Connection recieved from %s ", conn.RemoteAddr()))
 	colouredPacket, foundMatch := replaceTerms(packet, terms)
 	if file != "" && foundMatch {
 		file, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			slog.Error("Failed to open output file")
 		}
 
 		file.Write([]byte(packet))
@@ -54,9 +56,9 @@ func handleConnection(conn net.Conn, terms []string, file string) {
 
 	if len(terms) != 0 {
 		if foundMatch {
-			fmt.Printf("\n%s", colouredPacket)
+			fmt.Println(colouredPacket)
 		} else {
-			fmt.Println(color.RedString("NO MATCH"))
+			slog.Warn("NO MATCH")
 		}
 	}
 
@@ -66,7 +68,7 @@ func handleConnection(conn net.Conn, terms []string, file string) {
 func runServer(cmd *cobra.Command, args []string) {
 	addr, err := cmd.Flags().GetIP("address")
 	if err != nil {
-		fmt.Println("Invalid IP address")
+		slog.Error("Invalid IP Address")
 		return
 	}
 
@@ -74,7 +76,7 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	network, _ := cmd.Flags().GetString("network")
 	if network != "tcp" && network != "udp" {
-		fmt.Println("Invalid network. Only 'tcp' and 'udp' are supported")
+		slog.Error("Invalid network. Only 'tcp' and 'udp' are supported")
 		return
 	}
 
@@ -83,15 +85,15 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	listener, err := net.Listen(network, addr.String()+":"+fmt.Sprintf("%d", port))
 	if err != nil {
-		fmt.Println("Failed to start watchtower: " + err.Error())
+		slog.Error("Failed to start watchtower: " + err.Error())
 		return
 	}
 
-	fmt.Printf("Listening on %s:%d\n", addr, port)
+	slog.Info(fmt.Sprintf("Listening on %s:%d", addr, port))
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println(err)
+			slog.Error("Error accepting connection: " + err.Error())
 			break
 		}
 		go handleConnection(conn, terms, file)
