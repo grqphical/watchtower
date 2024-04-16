@@ -1,6 +1,6 @@
 # watchtower - A programmable TCP server
 
-watchtower is a program that hosts a server and can be programmed to search for specific data within incoming traffic.
+watchtower is a program that hosts a TCP server and can be programmed to search for specific data within incoming traffic
 
 ## Functional Goals
 
@@ -72,11 +72,3 @@ $ watchtwoer -s "\d*" -r response.html
 ## License
 
 watchtower is licensed under the MIT license
-
-```
-
-```
-
-```
-
-```

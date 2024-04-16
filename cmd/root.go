@@ -12,12 +12,12 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "watchtower",
-	Short: "A programmable TCP/UDP server to debug incoming network requests.",
-	Long: `A programmable TCP/UDP server to debug incoming network requests.
+	Short: "A programmable TCP server to debug incoming network requests.",
+	Long: `A programmable TCP server to debug incoming network requests.
 Watchtower can be configured to watch for specific strings, regex expressions, and much more.
 	
 Example usage (Host a TCP server on port 2000 looking for any request with 'foo' in it):
-watchtower -p 2000 -t tcp -s foo`,
+watchtower -p 2000 -s foo`,
 	Run:     runServer,
 	Version: "0.1.1",
 }
