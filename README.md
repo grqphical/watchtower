@@ -10,6 +10,7 @@ watchtower is a program that hosts a server and can be programmed to search for 
 3. Add CLI options to control behaviour of server
    - Include control of network protocol
    - Include control of host address and port
+4. Add option for user to output matched packets to a file
 
 ## Install
 
@@ -25,7 +26,7 @@ Running the base command hosts a basic TCP server on localhost port 8000
 $ watchtower
 ```
 
-You can specify the host and port with the `a` and `p` flags (address and port respectively)
+You can specify the host and port with the `-a` and `-p` flags (address and port respectively)
 
 ```bash
 $ watchtower -p 2000 -a 0.0.0.0
@@ -33,7 +34,7 @@ $ watchtower -p 2000 -a 0.0.0.0
 
 ### Filtering
 
-To add terms to search for use the `f` flag
+To add terms to search for use the `-s` flag
 
 ```bash
 $ watchtower -s foo
@@ -48,6 +49,12 @@ export WATCHTOWER_USE_REGEX=1
 watchtower -s "\d*"
 ```
 
+You can set watchtower to write all matches to a file with the `-f` flag
+
+```bash
+watchtower -s "\d*" -f output.txt
+```
+
 ## Changelog
 
 ### 0.1.1
@@ -57,3 +64,7 @@ watchtower -s "\d*"
 ## License
 
 watchtower is licensed under the MIT license
+
+```
+
+```
