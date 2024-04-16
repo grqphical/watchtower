@@ -22,7 +22,7 @@ watchtower -p 2000 -t tcp -s foo`,
 	Version: "0.1.1",
 }
 
-func handleConnection(conn net.Conn, terms []string, file string) {
+func handleConnection(conn net.Conn, terms []string, file string, responseFile string) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -42,7 +42,9 @@ func handleConnection(conn net.Conn, terms []string, file string) {
 
 	packet := string(output)
 	slog.Info(fmt.Sprintf("Connection recieved from %s ", conn.RemoteAddr()))
+
 	colouredPacket, foundMatch := replaceTerms(packet, terms)
+
 	if file != "" && foundMatch {
 		file, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -62,7 +64,22 @@ func handleConnection(conn net.Conn, terms []string, file string) {
 		}
 	}
 
-	conn.Write([]byte(""))
+	if responseFile == "" {
+		conn.Write([]byte(""))
+		return
+	}
+
+	if _, err := os.Stat(responseFile); err == nil {
+		data, err := os.ReadFile(responseFile)
+		if err != nil {
+			slog.Error("Could not read output file")
+			conn.Write([]byte(""))
+			return
+		}
+
+		conn.Write(data)
+	}
+
 }
 
 func runServer(cmd *cobra.Command, args []string) {
@@ -74,16 +91,11 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	port, _ := cmd.Flags().GetInt("port")
 
-	network, _ := cmd.Flags().GetString("network")
-	if network != "tcp" && network != "udp" {
-		slog.Error("Invalid network. Only 'tcp' and 'udp' are supported")
-		return
-	}
-
 	terms, _ := cmd.Flags().GetStringSlice("search-terms")
 	file, _ := cmd.Flags().GetString("output-file")
+	responseFile, _ := cmd.Flags().GetString("response-file")
 
-	listener, err := net.Listen(network, addr.String()+":"+fmt.Sprintf("%d", port))
+	listener, err := net.Listen("tcp", addr.String()+":"+fmt.Sprintf("%d", port))
 	if err != nil {
 		slog.Error("Failed to start watchtower: " + err.Error())
 		return
@@ -96,7 +108,7 @@ func runServer(cmd *cobra.Command, args []string) {
 			slog.Error("Error accepting connection: " + err.Error())
 			break
 		}
-		go handleConnection(conn, terms, file)
+		go handleConnection(conn, terms, file, responseFile)
 	}
 }
 
@@ -110,9 +122,9 @@ func Execute() {
 func init() {
 	rootCmd.Flags().IPP("address", "a", net.ParseIP("127.0.0.1"), "IP To host server on")
 	rootCmd.Flags().IntP("port", "p", 8000, "Port to host server on")
-	rootCmd.Flags().StringP("network", "n", "tcp", "Network protocol to use. Either tcp or udp")
 	rootCmd.Flags().StringSliceP("search-terms", "s", []string{}, `Term(s) to search incoming requests for. Set the environment variable
 WATCHTOWER_USE_REGEX = 1 to use regex searches
 	`)
 	rootCmd.Flags().StringP("output-file", "f", "", "File to output matched values to")
+	rootCmd.Flags().StringP("response-file", "r", "", "Data from a file to respond to incoming connection with")
 }
