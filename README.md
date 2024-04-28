@@ -61,7 +61,7 @@ $ watchtower -s "\d*" -f output.txt
 You can control how watchtower responds to incoming connections by providing a file to the `r` flag
 
 ```bash
-$ watchtwoer -s "\d*" -r response.html
+$ watchtower -s "\d*" -r response.html
 ```
 
 ## Changelog
